@@ -6,25 +6,29 @@ import datetime
 import falcon
 import json
 import threading
+from waitress import serve
 
+"""Extended Version of the radio alarm  for Raspberry Pi
+Author: Lionel Perrin
+Published under 3-Clause BSD License.
+"""
 
 """Simple radio alarm using a Raspberry Pi.
-
 This plays internet radio using mplayer and provides some RESTful API
 using gunicorn.
-
 Author: Julian Oes <julian@oes.ch>
-
 Published under 3-Clause BSD License.
 """
 
 
 class PersistentConfig(object):
     CONFIG_FILENAME = 'radio-config.json'
-    DEFAULT_CONFIG = {"alarm": {"on": False,
-                                "hour": 06,
-                                "min": 55},
-                      "radio": {"playing": False}}
+    # day = 0 is Monday
+    DEFAULT_CONFIG = {"alarms": [
+        {"name": "work", "days": [1], "on": False, "hour": 5, "min": 55},
+        {"name": "normal", "days": [2, 3, 4, 5, 6], "on": False, "hour": 7, "min": 55},
+    ],
+        "radio": {"playing": False}}
 
     def __init__(self):
         try:
@@ -71,7 +75,7 @@ class Radio(object):
     def start_playing(self):
         if not self.is_playing():
             self.process = subprocess.Popen(
-                ["mplayer", "http://stream.srg-ssr.ch/m/drs3/mp3_128"])
+                ["mplayer", "https://streamingp.shoutcast.com/hotmixradio-sunny-128.mp3", " -volume 150"])
 
     def stop_playing(self):
         if self.is_playing():
@@ -136,59 +140,92 @@ class AlarmResource(object):
 
     def run(self):
         while not self.thread_should_exit:
-            if self.config.get('alarm/on'):
-                self.check_time()
+
+            for alarm in self.config.get('alarms'):
+                if alarm.get('on'):
+                    self.check_time(hour=alarm.get('hour'), minutes=alarm.get('min'), days=alarm.get('days'))
             time.sleep(1)
 
-    def check_time(self):
+    def check_time(self, hour, minutes, days):
+        now = datetime.datetime.now()
+        start = datetime.time(hour, minutes)
 
-        now = datetime.datetime.now().time()
-        start = datetime.time(self.config.get('alarm/hour'),
-                              self.config.get('alarm/min'))
-        # Play for 1 hour
-        end = datetime.time(self.config.get('alarm/hour')+1,
-                            self.config.get('alarm/min'))
-        radio_should_be_playing = (start <= now <= end)
+        # Play for 10 minutes
+        endhour = hour
+        if minutes + 10 < 60:
+            endmin = minutes + 10
+        else:
+            endmin = 60 - (minutes + 10)
+            endhour = hour + 1
+
+        end = datetime.time(endhour, endmin + 10)
+
+        radio_should_be_playing = (start <= now.time() <= end) and (now.weekday() in days)
+
         if radio_should_be_playing and not self.last_should_be_playing:
+            print('Start Radio')
             self.radio.start_playing()
             self.last_should_be_playing = radio_should_be_playing
         elif not radio_should_be_playing and self.last_should_be_playing:
+            print('Stop Radio')
             self.radio.stop_playing()
             self.last_should_be_playing = radio_should_be_playing
 
-    def on_get(self, req, resp, action):
+    def on_get(self, req, resp, action=''):
         """Handles GET requests"""
 
-        # import pprint
-        # pp = PrettyPrinter(indent=4)
-        # pp.pprint(req)
+        if action == "status" or action == '':
+            result = self.config.get('alarms')
 
-        if action == "on":
-            if self.config.get('alarm/on'):
-                result = {"status": "alarm already on"}
-            else:
-                result = {"status": "ok, set alarm on"}
-            self.config.set('alarm/on', True)
+        elif action.isnumeric():
+            result = self.config.get('alarms')[int(action)]
 
-        elif action == "off":
-            if self.config.get('alarm/on'):
-                result = {"status": "ok, set alarm off"}
-            else:
-                result = {"status": "alarm already off"}
-            self.config.set('alarm/on', False)
-
-        elif action == "status":
-            if self.config.get('alarm/on'):
-                result = {"status": "on at %02d:%02d" %
-                          (self.config.get('alarm/hour'),
-                           self.config.get('alarm/min'))}
-            else:
-                result = {"status": "off"}
         else:
-            result = {"status": "not sure what to do with this"}
+            raise falcon.HTTPError(falcon.HTTP_404)
 
-        resp.status = falcon.HTTP_200
         resp.body = json.dumps(result)
+
+    def on_post(self, req, resp, action):
+        """Handles POST requests"""
+
+        # every post should have a body containing data to be posted
+        try:
+            raw_json = req.stream.read()
+        except Exception as ex:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+        try:
+            result = json.loads(raw_json, encoding='utf-8')
+        except ValueError:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid JSON',
+                                   'Could not decode the request body. The ''JSON was incorrect.')
+
+        if action == "turnon":
+            alarms = self.config.get('alarms')
+
+            try:
+                alarm = alarms[result['Alarm']]
+                alarm['on'] = True
+
+            except Exception as ex:
+                raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+        elif action == "turnoff":
+            alarms = self.config.get('alarms')
+
+            try:
+                alarm = alarms[result['Alarm']]
+                alarm['on'] = False
+
+            except Exception as ex:
+                raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+        else:
+            raise falcon.HTTPError(falcon.HTTP_404)
+
+        # since chagnes are made it returns all the alarms
+        resp.body = json.dumps(alarms)
+        resp.status()
 
 
 class AlarmTimeResource(object):
@@ -227,8 +264,7 @@ alarm_time_resource = AlarmTimeResource(config)
 
 api.add_route('/radio/{action}', radio_resource)
 api.add_route('/alarm/{action}', alarm_resource)
+api.add_route('/alarm', alarm_resource)
 api.add_route('/alarm/time/{hour}:{min}', alarm_time_resource)
 
-
-if __name__ == '__main__':
-    print("Needs to be run using 'gunicorn -b :80 radio:api'")
+serve(api, host='0.0.0.0', port=8001)
