@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import subprocess
 import time
 import datetime
@@ -254,17 +253,18 @@ class AlarmTimeResource(object):
 
 api = falcon.API()
 
-radio = Radio()
+    radio = Radio()
 
-config = PersistentConfig()
+    config = PersistentConfig()
 
-radio_resource = RadioResource(radio, config)
-alarm_resource = AlarmResource(radio, config)
-alarm_time_resource = AlarmTimeResource(config)
+    radio_resource = RadioResource(radio, config)
+    alarm_resource = AlarmResource(radio, config)
+    alarm_time_resource = AlarmTimeResource(config)
+    shutdown_resource = ShutdownTool()
 
-api.add_route('/radio/{action}', radio_resource)
-api.add_route('/alarm/{action}', alarm_resource)
-api.add_route('/alarm', alarm_resource)
-api.add_route('/alarm/time/{hour}:{min}', alarm_time_resource)
-
-serve(api, host='0.0.0.0', port=8001)
+    api.add_route('/radio/{action}', radio_resource)
+    api.add_route('/alarm/{action}', alarm_resource)
+    api.add_route('/alarm', alarm_resource)
+    api.add_route('/alarm/time/{hour}:{min}', alarm_time_resource)
+    api.add_route('/shutdown', ShutdownTool)
+    serve(api, host='0.0.0.0', port=8001)

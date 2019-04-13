@@ -8,18 +8,17 @@ It is basically a tiny REST interface using [Waitress](https://docs.pylonsprojec
 ### Dependencies
 
 ```
-sudo apt install python git mplayer python-falcon
+sudo apt install python git mplayer python-falcon python-pip
 ```
 
 ### Get it
 
 ```
 cd ~
-mkdir src
-cd src
-git clone https://github.com/julianoes/rpi-alarm
+git clone https://github.com/bb4L/rpi-radio-alarm.git
 ```
-Afterwards run
+
+Afterwards run inside the project
 ```
 pip install -r requirements.txt
 ```
@@ -43,7 +42,7 @@ sudo crontab -e
 
 Then, enter the line:
 ```
-@reboot sh /home/pi/src/launcher.sh >/home/pi/logs/cronlog 2>&1
+@reboot sh /home/pi/rpi-radio-alarm/launcher.sh >/home/pi/rpi-radio-alarm/logs/cronlog 2>&1
 ```
 
 # License

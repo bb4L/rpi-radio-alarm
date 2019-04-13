@@ -1,6 +1,6 @@
 #!/bin/sh
 
 cd /
-cd home/pi/src
-sudo python radio.py
+cd home/pi/rpi-radio-alarm
+python radio.py
 cd /
