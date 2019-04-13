@@ -33,7 +33,7 @@ class PersistentConfig(object):
         try:
             with open(self.CONFIG_FILENAME, 'r') as f:
                 self._config = json.load(f)
-        except:
+        except FileNotFoundError:
             self._config = None
 
         if self._config is None:
@@ -87,9 +87,9 @@ class Radio(object):
 
 class RadioResource(object):
 
-    def __init__(self, radio, config):
-        self.radio = radio
-        self.config = config
+    def __init__(self, radio_element, configuration):
+        self.radio = radio_element
+        self.config = configuration
         if self.config.get('radio/playing'):
             self.radio.start_playing()
 
@@ -116,7 +116,7 @@ class RadioResource(object):
             else:
                 result = {"status": "stopped"}
         else:
-            result = {"status": "not sure what to do with this"}
+            raise falcon.HTTPError(falcon.HTTP_404)
 
         resp.status = falcon.HTTP_200
         resp.body = json.dumps(result)
@@ -124,11 +124,11 @@ class RadioResource(object):
 
 class AlarmResource(object):
 
-    def __init__(self, radio, config):
-        self.config = config
+    def __init__(self, radio_element, configuration):
+        self.config = configuration
         self.last_should_be_playing = False
 
-        self.radio = radio
+        self.radio = radio_element
         self.thread_should_exit = False
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
@@ -222,7 +222,7 @@ class AlarmResource(object):
         else:
             raise falcon.HTTPError(falcon.HTTP_404)
 
-        # since chagnes are made it returns all the alarms
+        # since changes are made it returns all the alarms
         resp.body = json.dumps(alarms)
         resp.status()
 
@@ -232,15 +232,15 @@ class AlarmTimeResource(object):
     def __init__(self, config):
         self.config = config
 
-    def on_get(self, req, resp, hour, min):
+    def on_get(self, req, resp, hour, minutes):
         hour = int(hour)
-        min = int(min)
+        minutes = int(minutes)
 
-        if hour is not None and min is not None:
-            if 23 >= hour >= 0 and 59 >= min >= 0:
+        if hour is not None and minutes is not None:
+            if 23 >= hour >= 0 and 59 >= minutes >= 0:
                 self.config.set('alarm/hour', hour)
-                self.config.set('alarm/min', min)
-                result = {"status": "time set to %02d:%02d" % (hour, min)}
+                self.config.set('alarm/min', minutes)
+                result = {"status": "time set to %02d:%02d" % (hour, minutes)}
             else:
                 result = {"status": "time not valid"}
 
@@ -251,7 +251,8 @@ class AlarmTimeResource(object):
         resp.body = json.dumps(result)
 
 
-api = falcon.API()
+if __name__ == '__main__':
+    api = falcon.API()
 
     radio = Radio()
 
