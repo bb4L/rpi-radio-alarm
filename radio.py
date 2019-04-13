@@ -260,11 +260,10 @@ api = falcon.API()
     radio_resource = RadioResource(radio, config)
     alarm_resource = AlarmResource(radio, config)
     alarm_time_resource = AlarmTimeResource(config)
-    shutdown_resource = ShutdownTool()
 
     api.add_route('/radio/{action}', radio_resource)
     api.add_route('/alarm/{action}', alarm_resource)
     api.add_route('/alarm', alarm_resource)
     api.add_route('/alarm/time/{hour}:{min}', alarm_time_resource)
-    api.add_route('/shutdown', ShutdownTool)
+
     serve(api, host='0.0.0.0', port=8001)
