@@ -218,13 +218,22 @@ class AlarmResource(object):
 
             except Exception as ex:
                 raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+        elif action == "new":
+            alarms = self.config.get('alarms')
+            new_alarm = result['Alarm']
+            print(new_alarm)
+            if (new_alarm['name'] is None) or (new_alarm['on'] is None) or (new_alarm['days'] is None) or (
+                    len(new_alarm['days']) < 1) or (new_alarm['hour'] is None) or (new_alarm['min'] is None):
+                raise falcon.HTTP_400
+            alarms.append(new_alarm)
+
+            resp.status = falcon.HTTP_201
 
         else:
             raise falcon.HTTPError(falcon.HTTP_404)
 
         # since changes are made it returns all the alarms
         resp.body = json.dumps(alarms)
-        resp.status()
 
 
 class AlarmTimeResource(object):
