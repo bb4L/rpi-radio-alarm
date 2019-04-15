@@ -154,11 +154,10 @@ class AlarmResource(object):
         if minutes + 10 < 60:
             endmin = minutes + 10
         else:
-            endmin = 60 - (minutes + 10)
+            endmin = 60 - minutes + 10
             endhour = hour + 1
 
-        end = datetime.time(endhour, endmin + 10)
-
+        end = datetime.time(endhour, endmin)
         radio_should_be_playing = (start <= now.time() <= end) and (now.weekday() in days)
 
         if radio_should_be_playing and not self.last_should_be_playing:
