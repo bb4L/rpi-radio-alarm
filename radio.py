@@ -193,16 +193,7 @@ class AlarmResource(object):
         """Handles POST requests"""
 
         # every post should have a body containing data to be posted
-        try:
-            raw_json = req.stream.read()
-        except Exception as ex:
-            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
-
-        try:
-            result = json.loads(raw_json, encoding='utf-8')
-        except ValueError:
-            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid JSON',
-                                   'Could not decode the request body. The ''JSON was incorrect.')
+        result = self.get_json_from_request(req)
 
         if action == "turnon":
             alarms = self.config.get('alarms')
@@ -241,6 +232,35 @@ class AlarmResource(object):
 
         # since changes are made it returns all the alarms
         resp.body = json.dumps(alarms)
+
+    def on_delete(self, req, resp):
+        result = self.get_json_from_request(req)
+
+        alarms = self.config.get('alarms')
+
+        try:
+            del (alarms[result['Alarm']])
+            self.config.set('alarms', alarms)
+
+        except Exception as ex:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+        resp.status = falcon.HTTP_202
+        resp.body = json.dumps(alarms)
+
+    @staticmethod
+    def get_json_from_request(req):
+        try:
+            raw_json = req.stream.read()
+        except Exception as ex:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+        try:
+            result = json.loads(raw_json, encoding='utf-8')
+        except ValueError:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid JSON',
+                                   'Could not decode the request body. The ''JSON was incorrect.')
+        return result
 
 
 class AlarmTimeResource(object):
