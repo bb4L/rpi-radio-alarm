@@ -139,13 +139,26 @@ class AlarmResource(object):
 
     def run(self):
         while not self.thread_should_exit:
-
+            radio_should_be_playing = False
             for alarm in self.config.get('alarms'):
                 if alarm.get('on'):
-                    self.check_time(hour=alarm.get('hour'), minutes=alarm.get('min'), days=alarm.get('days'))
+                    play_radio = self.check_time(hour=alarm.get('hour'), minutes=alarm.get('min'),
+                                                 days=alarm.get('days'))
+                    if play_radio:
+                        radio_should_be_playing = play_radio
+                        break
+            if radio_should_be_playing and not self.last_should_be_playing:
+                print('Start Radio')
+                self.radio.start_playing()
+                self.last_should_be_playing = radio_should_be_playing
+            elif not radio_should_be_playing and self.last_should_be_playing:
+                print('Stop Radio')
+                self.radio.stop_playing()
+                self.last_should_be_playing = radio_should_be_playing
             time.sleep(1)
 
-    def check_time(self, hour, minutes, days):
+    @staticmethod
+    def check_time(hour, minutes, days):
         now = datetime.datetime.now()
         start = datetime.time(hour, minutes)
 
@@ -160,14 +173,7 @@ class AlarmResource(object):
         end = datetime.time(endhour, endmin)
         radio_should_be_playing = (start <= now.time() <= end) and (now.weekday() in days)
 
-        if radio_should_be_playing and not self.last_should_be_playing:
-            print('Start Radio')
-            self.radio.start_playing()
-            self.last_should_be_playing = radio_should_be_playing
-        elif not radio_should_be_playing and self.last_should_be_playing:
-            print('Stop Radio')
-            self.radio.stop_playing()
-            self.last_should_be_playing = radio_should_be_playing
+        return radio_should_be_playing
 
     def on_get(self, req, resp, action=''):
         """Handles GET requests"""
@@ -220,11 +226,13 @@ class AlarmResource(object):
         elif action == "new":
             alarms = self.config.get('alarms')
             new_alarm = result['Alarm']
-            print(new_alarm)
+
             if (new_alarm['name'] is None) or (new_alarm['on'] is None) or (new_alarm['days'] is None) or (
                     len(new_alarm['days']) < 1) or (new_alarm['hour'] is None) or (new_alarm['min'] is None):
                 raise falcon.HTTP_400
+
             alarms.append(new_alarm)
+            self.config.set('alarms', alarms)
 
             resp.status = falcon.HTTP_201
 
