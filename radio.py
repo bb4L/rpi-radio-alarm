@@ -260,7 +260,7 @@ class AlarmResource(object):
                 del (alarms[int(action)])
             except IndexError:
                 raise_index_error(action)
-
+            self.config.set('alarms', alarms)
             resp.status = falcon.HTTP_202
             resp.body = json.dumps(alarms)
         else:
