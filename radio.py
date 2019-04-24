@@ -296,7 +296,7 @@ class HandleCORS(object):
 
 
 if __name__ == '__main__':
-    api = falcon.API(middleware=[HandleCORS])
+    api = falcon.API(middleware=[HandleCORS()])
 
     radio = Radio()
 
