@@ -2,5 +2,5 @@
 
 cd /
 cd home/pi/rpi-radio-alarm
-python radio.py
+python3 radio.py
 cd /

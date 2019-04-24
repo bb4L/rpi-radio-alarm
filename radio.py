@@ -24,8 +24,6 @@ class PersistentConfig(object):
     CONFIG_FILENAME = 'radio-config.json'
     # day = 0 is Monday
     DEFAULT_CONFIG = {"alarms": [
-        {"name": "work", "days": [1], "on": False, "hour": 5, "min": 55},
-        {"name": "normal", "days": [2, 3, 4, 5, 6], "on": False, "hour": 7, "min": 55},
     ],
         "radio": {"playing": False}}
 
@@ -63,6 +61,28 @@ class PersistentConfig(object):
         return ret_value
 
 
+def get_json_from_request(req):
+    try:
+        raw_json = req.stream.read()
+    except Exception as ex:
+        raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+
+    try:
+        result = json.loads(raw_json, encoding='utf-8')
+    except ValueError:
+        raise falcon.HTTPError(falcon.HTTP_400, 'Invalid JSON',
+                               'Could not decode the request body. The ''JSON was incorrect.')
+    return result
+
+
+def raise_value_error(val):
+    raise falcon.HTTPError(falcon.HTTP_404, description="Value error: '" + val + "' is not a number")
+
+
+def raise_index_error(idx):
+    raise falcon.HTTPError(falcon.HTTP_404, description="Index error: '" + idx + "' no such index")
+
+
 class Radio(object):
 
     def __init__(self):
@@ -93,33 +113,35 @@ class RadioResource(object):
         if self.config.get('radio/playing'):
             self.radio.start_playing()
 
-    def on_get(self, req, resp, action):
+    def on_get(self, req, resp, action=None):
         """Handles GET requests"""
 
-        if action == "start":
-            if self.radio.is_playing():
-                result = {"status": "already started"}
-            else:
-                result = {"status": "ok let's start this"}
-                self.radio.start_playing()
-            self.config.set('radio/playing', True)
-        elif action == "stop":
-            if self.radio.is_playing():
-                result = {"status": "ok let's stop this"}
-                self.radio.stop_playing()
-            else:
-                result = {"status": "already stopped"}
-            self.config.set('radio/playing', False)
-        elif action == "status":
-            if self.radio.is_playing():
-                result = {"status": "started"}
-            else:
-                result = {"status": "stopped"}
+        if action == "status" or action is None:
+            result = {'isPlaying': self.config.get('radio/playing')}
         else:
-            raise falcon.HTTPError(falcon.HTTP_404)
+            raise falcon.HTTPError(falcon.HTTP_404, description="Endpoint GET 'radio/" + action + "' not supported")
 
         resp.status = falcon.HTTP_200
         resp.body = json.dumps(result)
+
+    def on_post(self, req, resp):
+        try:
+            result = get_json_from_request(req)['switch']
+        except KeyError:
+            raise falcon.HTTPError(falcon.HTTP_400, description="JSON Key 'switch' is missing")
+
+        if result == 'on':
+            if not self.radio.is_playing():
+                self.radio.start_playing()
+                self.config.set('radio/playing', True)
+        elif result == 'off':
+            if self.radio.is_playing():
+                self.radio.stop_playing()
+                self.config.set('radio/playing', False)
+        else:
+            raise falcon.HTTPError(falcon.HTTP_400)
+        resp.status = falcon.HTTP_200
+        resp.body = json.dumps({'isPlaying': self.config.get('radio/playing')})
 
 
 class AlarmResource(object):
@@ -178,113 +200,72 @@ class AlarmResource(object):
     def on_get(self, req, resp, action=''):
         """Handles GET requests"""
 
-        if action == "status" or action == '':
+        if action == '':
             result = self.config.get('alarms')
 
         elif action.isnumeric():
-            result = self.config.get('alarms')[int(action)]
-
+            try:
+                result = self.config.get('alarms')[int(action)]
+            except IndexError:
+                raise falcon.HTTPError(falcon.HTTP_404, description="Index error for '" + action + "' no such index")
         else:
-            raise falcon.HTTPError(falcon.HTTP_404)
+            raise_value_error(action)
 
         resp.body = json.dumps(result)
 
-    def on_post(self, req, resp, action):
+    def on_put(self, req, resp, action=''):
+        if action.isnumeric():
+            index = int(action)
+
+            try:
+                alarm_to_change = self.config.get('alarms')[index]
+            except IndexError:
+                raise_index_error(action)
+
+            data = get_json_from_request(req)
+
+            for val in data:
+                alarm_to_change[val] = data[val]
+
+            resp.status = falcon.HTTP_202
+            resp.body = json.dumps(alarm_to_change)
+        else:
+            raise_value_error(action)
+
+    def on_post(self, req, resp, action=None):
         """Handles POST requests"""
 
-        # every post should have a body containing data to be posted
-        result = self.get_json_from_request(req)
+        if action is not None:
+            raise falcon.HTTPError(falcon.HTTP_404, description="Endpoint GET 'alarm/" + action + "' not supported")
 
-        if action == "turnon":
-            alarms = self.config.get('alarms')
-
-            try:
-                alarm = alarms[result['Alarm']]
-                alarm['on'] = True
-
-            except Exception as ex:
-                raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
-
-        elif action == "turnoff":
-            alarms = self.config.get('alarms')
-
-            try:
-                alarm = alarms[result['Alarm']]
-                alarm['on'] = False
-
-            except Exception as ex:
-                raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
-        elif action == "new":
-            alarms = self.config.get('alarms')
-            new_alarm = result['Alarm']
-
-            if (new_alarm['name'] is None) or (new_alarm['on'] is None) or (new_alarm['days'] is None) or (
-                    len(new_alarm['days']) < 1) or (new_alarm['hour'] is None) or (new_alarm['min'] is None):
-                raise falcon.HTTP_400
-
-            alarms.append(new_alarm)
-            self.config.set('alarms', alarms)
-
-            resp.status = falcon.HTTP_201
-
-        else:
-            raise falcon.HTTPError(falcon.HTTP_404)
-
-        # since changes are made it returns all the alarms
-        resp.body = json.dumps(alarms)
-
-    def on_delete(self, req, resp):
-        result = self.get_json_from_request(req)
+        # every post should have a body containing the data of the alarm
+        result = get_json_from_request(req)
 
         alarms = self.config.get('alarms')
+        new_alarm = result
 
-        try:
-            del (alarms[result['Alarm']])
-            self.config.set('alarms', alarms)
+        if (new_alarm['name'] is None) or (new_alarm['on'] is None) or (new_alarm['days'] is None) or (
+                    len(new_alarm['days']) < 1) or (new_alarm['hour'] is None) or (new_alarm['min'] is None):
+            raise falcon.HTTPError(falcon.HTTP_400, description="A attribute is missing in the data!")
 
-        except Exception as ex:
-            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+        alarms.append(new_alarm)
+        self.config.set('alarms', alarms)
 
-        resp.status = falcon.HTTP_202
+        resp.status = falcon.HTTP_201
         resp.body = json.dumps(alarms)
 
-    @staticmethod
-    def get_json_from_request(req):
-        try:
-            raw_json = req.stream.read()
-        except Exception as ex:
-            raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+    def on_delete(self, req, resp, action=''):
+        if action.isnumeric():
+            alarms = self.config.get('alarms')
+            try:
+                del (alarms[int(action)])
+            except IndexError:
+                raise_index_error(action)
 
-        try:
-            result = json.loads(raw_json, encoding='utf-8')
-        except ValueError:
-            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid JSON',
-                                   'Could not decode the request body. The ''JSON was incorrect.')
-        return result
-
-
-class AlarmTimeResource(object):
-
-    def __init__(self, config):
-        self.config = config
-
-    def on_get(self, req, resp, hour, minutes):
-        hour = int(hour)
-        minutes = int(minutes)
-
-        if hour is not None and minutes is not None:
-            if 23 >= hour >= 0 and 59 >= minutes >= 0:
-                self.config.set('alarm/hour', hour)
-                self.config.set('alarm/min', minutes)
-                result = {"status": "time set to %02d:%02d" % (hour, minutes)}
-            else:
-                result = {"status": "time not valid"}
-
+            resp.status = falcon.HTTP_202
+            resp.body = json.dumps(alarms)
         else:
-            result = {"status": "not sure what to do with this"}
-
-        resp.status = falcon.HTTP_200
-        resp.body = json.dumps(result)
+            raise_value_error(action)
 
 
 class HandleCORS(object):
@@ -304,11 +285,10 @@ if __name__ == '__main__':
 
     radio_resource = RadioResource(radio, config)
     alarm_resource = AlarmResource(radio, config)
-    alarm_time_resource = AlarmTimeResource(config)
 
     api.add_route('/radio/{action}', radio_resource)
+    api.add_route('/radio', radio_resource)
     api.add_route('/alarm/{action}', alarm_resource)
     api.add_route('/alarm', alarm_resource)
-    api.add_route('/alarm/time/{hour}:{min}', alarm_time_resource)
 
     serve(api, host='0.0.0.0', port=8001)
