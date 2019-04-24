@@ -215,9 +215,10 @@ class AlarmResource(object):
     def on_put(self, req, resp, action=''):
         if action.isnumeric():
             index = int(action)
+            alarms = self.config.get('alarms')
 
             try:
-                alarm_to_change = self.config.get('alarms')[index]
+                alarm_to_change = alarms[index]
             except IndexError:
                 raise_index_error(action)
 
@@ -226,6 +227,7 @@ class AlarmResource(object):
             for val in data:
                 alarm_to_change[val] = data[val]
 
+            self.config.set('alarms', alarms)
             resp.status = falcon.HTTP_202
             resp.body = json.dumps(alarm_to_change)
         else:
