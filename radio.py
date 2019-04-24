@@ -63,9 +63,9 @@ class PersistentConfig(object):
 
 def get_json_from_request(req):
     try:
-        raw_json = req.stream.read()
+        raw_json = req.stream.read().decode('utf-8')
     except Exception as ex:
-        raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex.message)
+        raise falcon.HTTPError(falcon.HTTP_400, 'Error', ex)
 
     try:
         result = json.loads(raw_json, encoding='utf-8')
@@ -270,9 +270,11 @@ class AlarmResource(object):
 
 class HandleCORS(object):
     def process_request(self, req, resp):
+        print(req.host)
+
         resp.set_header('Access-Control-Allow-Origin', '*')
-        resp.set_header('Access-Control-Allow-Methods', '*')
-        resp.set_header('Access-Control-Allow-Headers', 'Content-Type')
+        resp.set_header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE')
+        resp.set_header('Access-Control-Allow-Headers', 'content-type')
         resp.set_header('Access-Control-Max-Age', 1728000)  # 20 days
 
 
