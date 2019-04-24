@@ -23,9 +23,8 @@ Published under 3-Clause BSD License.
 class PersistentConfig(object):
     CONFIG_FILENAME = 'radio-config.json'
     # day = 0 is Monday
-    DEFAULT_CONFIG = {"alarms": [
-    ],
-        "radio": {"playing": False}}
+    # Example for a alarm {"name":"alarmname", "days":[2,4,5], "on": true, "hour": 14, "min":46}
+    DEFAULT_CONFIG = {"alarms": [], "radio": {"playing": False}}
 
     def __init__(self):
         try:
@@ -270,8 +269,6 @@ class AlarmResource(object):
 
 class HandleCORS(object):
     def process_request(self, req, resp):
-        print(req.host)
-
         resp.set_header('Access-Control-Allow-Origin', '*')
         resp.set_header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE')
         resp.set_header('Access-Control-Allow-Headers', 'content-type')
