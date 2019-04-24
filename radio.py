@@ -287,8 +287,16 @@ class AlarmTimeResource(object):
         resp.body = json.dumps(result)
 
 
+class HandleCORS(object):
+    def process_request(self, req, resp):
+        resp.set_header('Access-Control-Allow-Origin', '*')
+        resp.set_header('Access-Control-Allow-Methods', '*')
+        resp.set_header('Access-Control-Allow-Headers', 'Content-Type')
+        resp.set_header('Access-Control-Max-Age', 1728000)  # 20 days
+
+
 if __name__ == '__main__':
-    api = falcon.API()
+    api = falcon.API(middleware=[HandleCORS])
 
     radio = Radio()
 
