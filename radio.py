@@ -188,7 +188,7 @@ class AlarmResource(object):
         if minutes + 10 < 60:
             endmin = minutes + 10
         else:
-            endmin = 60 - minutes + 10
+            endmin = 10 - (60 - minutes)
             endhour = hour + 1
 
         end = datetime.time(endhour, endmin)
